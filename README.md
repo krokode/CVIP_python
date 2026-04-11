@@ -29,7 +29,7 @@ This repository contains Python projects and assignments for the Computer Vision
 3. Run the main demo:
 
    ```powershell
-   python .\submission.py
+   python .\final_projects.py
    ```
 
 ## Notes
