@@ -327,28 +327,148 @@ class Blemish():
 
 # Utility Class for Mouse Handling
 class MouseHandler():
-    def __init__(self, window_name):
+    def __init__(self, window_name, maxpoints=None):
+        self.maxpoints = maxpoints
         self.window_name = window_name
         self.points = []
         cv2.namedWindow(self.window_name)
         cv2.setMouseCallback(self.window_name, self.mouse_callback)
 
     def mouse_callback(self, event, x, y, flags, param):
+        """
+        Handle mouse events for point selection.
+        Adds points on left click if under maxpoints limit.
+        Draws a green circle at the clicked point if param (image) is provided.
+        """
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.points.append((x, y))
-            #print(f"Point selected: ({x}, {y})")
-            return (x, y)
+            if self.maxpoints is None or len(self.points) < self.maxpoints:
+                self.points.append((x, y))
+                if param is not None:
+                    cv2.circle(param, (x, y), 5, (0, 255, 0), -1)
+                    cv2.imshow(self.window_name, param)
+            else:
+                print("Maximum points reached.")
 
+class DocumentScanner():
+    def __init__(self, image_path, manual_selection=False):
+        self.image = imread_custom(image_path)
+        self.clone = self.image.copy()
+        self.manual_selection = manual_selection
+        if self.manual_selection:
+            self.mouse_handler = MouseHandler("Select Document Corners", maxpoints=4)
+        else:
+            self.mouse_handler = None
+
+    def get_document_corners(self):
+        while True:
+            cv2.imshow("Select Document Corners", self.clone)
+            if len(self.mouse_handler.points) == 4:
+                break
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        cv2.destroyAllWindows()
+        return self.mouse_handler.points
+    
+    def order_points(self, pts):
+        rect = np.zeros((4, 2), dtype="float32")
+        s = pts.sum(axis=1)
+        rect[0] = pts[np.argmin(s)]
+        rect[2] = pts[np.argmax(s)]
+        diff = np.diff(pts, axis=1)
+        rect[1] = pts[np.argmin(diff)]
+        rect[3] = pts[np.argmax(diff)]
+        return rect
+    
+    def contour_detection(self):
+        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edged = cv2.Canny(blurred, 75, 200)
+        contours, _ = cv2.findContours(edged.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
+        for contour in contours:
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            if len(approx) == 4:
+                return approx.reshape(4, 2)
+        return None
+    
+    def four_point_transform(self, pts):
+        rect = self.order_points(pts)
+        (tl, tr, br, bl) = rect
+        widthA = np.linalg.norm(br - bl)
+        widthB = np.linalg.norm(tr - tl)
+        maxWidth = max(int(widthA), int(widthB))
+        heightA = np.linalg.norm(tr - br)
+        heightB = np.linalg.norm(tl - bl)
+        maxHeight = max(int(heightA), int(heightB))
+        dst = np.array([[0, 0], [maxWidth - 1, 0], [maxWidth - 1, maxHeight - 1], [0, maxHeight - 1]], dtype="float32")
+        M = cv2.getPerspectiveTransform(rect, dst)
+        warped = cv2.warpPerspective(self.image, M, (maxWidth, maxHeight))
+        return warped
+    
+    def run_scanner(self, use_contour_detection=True):
+        corners = None
+        
+        if use_contour_detection:
+            corners = self.contour_detection()
+        
+        # If auto-detection was skipped OR it failed to find 4 points
+        if corners is None:
+            print("Switching to manual selection...")
+            # Initialize handler only when needed to save resources
+            self.mouse_handler = MouseHandler("Select Document Corners", maxpoints=4)
+            corners = self.get_document_corners()
+        
+        # Final check and transform
+        if corners is not None and len(corners) == 4:
+            # Ensure corners are a float32 numpy array for OpenCV
+            pts = np.array(corners, dtype="float32")
+            return self.four_point_transform(pts)
+        
+        print("Scanning cancelled or failed.")
+        return None
+    
+    def post_process(self, warped):
+        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        # T stands for 'Thresholded'
+        T = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                cv2.THRESH_BINARY, 11, 10)
+        return T
+            
 
 if __name__ == '__main__':
-    video_source = 0  # Use 0 for webcam, or replace with video file path like 'video.mp4'
-    glusses_path = "sunglass.png"
+    
+    #Initialize the scanner
+    image_path = "scanned-form.jpg"  # Replace with your document image path
+    output_path = "scanned-form-processed.jpg"  # Output path for the scanned image
+    scanner = DocumentScanner(image_path, manual_selection=False)
+    
+    # Run the detection and transformation
+    warped = scanner.run_scanner(use_contour_detection=True)
+    
+    if warped is not None:
+        final_scan = scanner.post_process(warped)
+        
+        cv2.imshow("Final Scanned Document", final_scan)
+        
+        # Save to disk
+        cv2.imwrite(output_path, final_scan)
+        
+        print("Press any key to close the window.")
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+    else:
+        print("Scanner failed to produce an image.")
 
-    insta = InstagramFilters(glusses_path, video_source)
+
+    # video_source = 0  # Use 0 for webcam, or replace with video file path like 'video.mp4'
+    # glusses_path = "sunglass.png"
+
+    # insta = InstagramFilters(glusses_path, video_source)
     
-    # Change the string to test different features: 
-    filters_list = ['cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses', None]
-    selected_filter = filters_list[4] 
+    # # Change the string to test different features: 
+    # filters_list = ['cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses', None]
+    # selected_filter = filters_list[4] 
     
-    print(f"Applying {selected_filter} filter. Press 'q' to quit.")
-    insta.start_filters_onvideo(filter=selected_filter)
+    # print(f"Applying {selected_filter} filter. Press 'q' to quit.")
+    # insta.start_filters_onvideo(filter=selected_filter)
