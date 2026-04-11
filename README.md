@@ -34,7 +34,8 @@ This repository contains Python projects and assignments for the Computer Vision
 
 ## Notes
 
-- 
+- The code is ready to copy-paste, but it is strongly recommended to understand it before doing so.
+- Use this as a learning TIP only
 
 ## Recommended Files
 
