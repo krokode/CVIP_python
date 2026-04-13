@@ -159,6 +159,41 @@ class InstagramFilters():
         
         return overlay
     
+    def _add_lens_reflection(self, sunglasses, intensity=0.25):
+        h, w = sunglasses.shape[:2]
+        num_channels = sunglasses.shape[2]
+
+        # Create the gradient reflection (always 3 channels)
+        y, x = np.ogrid[:h, :w]
+        gradient = ((x / w + y / h) / 2 * 255).astype(np.uint8)
+        reflection = np.stack([gradient] * 3, axis=2)
+        reflection = cv2.GaussianBlur(reflection, (31, 31), 0)
+
+        # Create the elliptical mask
+        mask = np.zeros((h, w), dtype=np.float32)
+        cv2.ellipse(
+            mask,
+            (w // 2, int(h * 0.3)),
+            (int(w * 0.45), int(h * 0.35)),
+            angle=-20,
+            startAngle=0,
+            endAngle=360,
+            color=1,
+            thickness=-1
+        )
+        mask = cv2.GaussianBlur(mask, (51, 51), 0)
+        
+        # Expand mask to 3D for broadcasting: (h, w, 1)
+        mask_3d = mask[:, :, np.newaxis]
+        blend_factor = intensity * mask_3d
+
+        # Apply to RGB channels only
+        result = sunglasses.copy().astype(np.float32)
+        result[:, :, :3] = (result[:, :, :3] * (1 - blend_factor) + 
+                            reflection * blend_factor)
+
+        return result.astype(np.uint8)
+
     def apply_sunglasses_filter(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
@@ -187,6 +222,7 @@ class InstagramFilters():
                 sunglasses = cv2.resize(self.glasses, (w_g, h_g))
             else:
                 sunglasses = self._create_sunglasses_overlay(w_g, h_g)
+            sunglasses = self._add_lens_reflection(sunglasses)
             
             alpha = sunglasses[:, :, 3] / 255.0
             alpha = alpha * 0.5
@@ -504,29 +540,29 @@ class SoccerTracker:
 
 
 if __name__ == '__main__':
-    cap = cv2.VideoCapture("soccer-ball.mp4")
-    soccer_tracker = SoccerTracker()
+    # cap = cv2.VideoCapture("soccer-ball.mp4")
+    # soccer_tracker = SoccerTracker()
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret: break
+    # while cap.isOpened():
+    #     ret, frame = cap.read()
+    #     if not ret: break
         
-        bbox, color = soccer_tracker.detect_and_track(frame, class_id=32)
+    #     bbox, color = soccer_tracker.detect_and_track(frame, class_id=32)
         
-        if bbox is not None:
-            x, y, w, h = [int(v) for v in bbox]
-            # Draw box and status
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-            cv2.putText(frame, soccer_tracker.status, (x, y - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    #     if bbox is not None:
+    #         x, y, w, h = [int(v) for v in bbox]
+    #         # Draw box and status
+    #         cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+    #         cv2.putText(frame, soccer_tracker.status, (x, y - 10), 
+    #                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
-        cv2.imshow("Soccer Detection & Tracking", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'): break
+    #     cv2.imshow("Soccer Detection & Tracking", frame)
+    #     if cv2.waitKey(1) & 0xFF == ord('q'): break
 
-    cap.release()
-    cv2.destroyAllWindows()
+    # cap.release()
+    # cv2.destroyAllWindows()
     
-    # #Initialize the scanner
+    # # #Initialize the scanner
     # image_path = "scanned-form.jpg"  # Replace with your document image path
     # output_path = "scanned-form-processed.jpg"  # Output path for the scanned image
     # scanner = DocumentScanner(image_path, manual_selection=False)
@@ -549,14 +585,14 @@ if __name__ == '__main__':
     #     print("Scanner failed to produce an image.")
 
 
-    # video_source = 0  # Use 0 for webcam, or replace with video file path like 'video.mp4'
-    # glusses_path = "sunglass.png"
+    video_source = 0  # Use 0 for webcam, or replace with video file path like 'video.mp4'
+    glusses_path = None # "sunglass.png"
 
-    # insta = InstagramFilters(glusses_path, video_source)
+    insta = InstagramFilters(glusses_path, video_source)
     
-    # # Change the string to test different features: 
-    # filters_list = ['cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses', None]
-    # selected_filter = filters_list[4] 
+    # Change the string to test different features: 
+    filters_list = ['cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses', None]
+    selected_filter = filters_list[4] 
     
-    # print(f"Applying {selected_filter} filter. Press 'q' to quit.")
-    # insta.start_filters_onvideo(filter=selected_filter)
+    print(f"Applying {selected_filter} filter. Press 'q' to quit.")
+    insta.start_filters_onvideo(filter=selected_filter)
