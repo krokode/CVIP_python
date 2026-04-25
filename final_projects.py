@@ -195,6 +195,9 @@ class InstagramFilters():
         return result.astype(np.uint8)
 
     def apply_sunglasses_filter(self, frame):
+        """
+        Apply a sunglasses filter to the input frame.
+        """
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
         result = frame.copy()
@@ -234,16 +237,14 @@ class InstagramFilters():
                     
         return result    
 
-    def start_filters_onvideo(self, filter=None, sigma_s=None, sigma_r=None, shade_factor=None):
+    def start_filters(self, filter=None, sigma_s=None, sigma_r=None, shade_factor=None):
         """
-        Start the video stream and apply the selected filter in real-time.
-        This method captures video frames from the webcam or video file, applies the specified filter to each frame, and displays the result in a window. The user can exit the video stream by pressing the 'q' key.
-        Args:           filter (str): The name of the filter to apply. 
-                                      Supported values are "cartoon", "cartoon_stylized", "pencil", "skin", and "sunglasses". If None, no filter is applied and the original video stream is shown.
-                        sigma_s (float): Optional parameter for stylization and pencil sketch filters to control the amount of smoothing. Higher values result in a more pronounced effect.
-                        sigma_r (float): Optional parameter for stylization and pencil sketch filters to control the range of colors that are smoothed together. Higher values result in more colors being blended.
-                        shade_factor (float): Optional parameter for pencil sketch filter to control the intensity of the shading. Higher values result in darker shading.
-        Returns:         None   
+        Start the video stream or display the image with the selected filter applied.
+        Args:
+            filter (str): The name of the filter to apply. Options: 'cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses'. If None, no filter is applied.
+            sigma_s (float): Parameter for stylization and pencil sketch filters that controls the size of the neighborhood used for filtering. Higher values result in a more pronounced effect.
+            sigma_r (float): Parameter for stylization and pencil sketch filters that controls the range of colors to be smoothed together. Higher values result in more smoothing across different colors.
+            shade_factor (float): Parameter for pencil sketch filter that controls the intensity of the shading. Higher values result in darker shading. Default is 0.08.
         """
         if not self.is_image:
             filter_type = filter.lower() if filter else None
@@ -251,7 +252,6 @@ class InstagramFilters():
                 ret, frame = self.cap.read()
                 if not ret:
                     break
-                
                 # Flip frame horizontally for a mirror effect (standard for webcam)
                 frame = cv2.flip(frame, 1) 
                 filtered_frame = self.selected_filter_action(filter_type, frame, sigma_s, sigma_r, shade_factor)
@@ -259,32 +259,26 @@ class InstagramFilters():
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             self.cap.release()
-            cv2.destroyAllWindows()
         else:
-            print("The provided source is an image. Please use start_filters_onimage for image sources.")
-
-
-    def start_filters_onimage(self, filter=None, sigma_s=None, sigma_r=None, shade_factor=None):
-        """
-        Apply the selected filter to the image and display the result.
-        This method applies the specified filter to the loaded image and displays it in a window. The user can close the window to exit.
-        Args:           filter (str): The name of the filter to apply.
-                                      Supported values are "cartoon", "cartoon_stylized", "pencil", "skin", and "sunglasses". If None, no filter is applied and the original image is shown.
-                        sigma_s (float): Optional parameter for stylization and pencil sketch filters to control the amount of smoothing. Higher values result in a more pronounced effect.
-                        sigma_r (float): Optional parameter for stylization and pencil sketch filters to control the range of colors that are smoothed together. Higher values result in more colors being blended.
-                        shade_factor (float): Optional parameter for pencil sketch filter to control the intensity of the shading. Higher values result in darker shading.
-        Returns:         None
-        """
-        if self.is_image:
             filter_type = filter.lower() if filter else None
             filtered_image = self.selected_filter_action(filter_type, self.image, sigma_s, sigma_r, shade_factor)
             cv2.imshow(f'{filter_type.capitalize() if filter_type else "Original"} Image', filtered_image)
             cv2.waitKey(0)
-            cv2.destroyAllWindows()
-        else:
-            print("The provided source is not an image. Please use start_filters_onvideo for video sources.")
+            
+        cv2.destroyAllWindows()
 
     def selected_filter_action(self, filter_type, frame, sigma_s, sigma_r, shade_factor):
+        """
+        Apply the selected filter to the given frame.
+        Args:
+            filter_type (str): The type of filter to apply.
+            frame (numpy.ndarray): The input frame.
+            sigma_s (float): Parameter for stylization and pencil sketch filters that controls the size of the neighborhood used for filtering.
+            sigma_r (float): Parameter for stylization and pencil sketch filters that controls the range of colors to be smoothed together.
+            shade_factor (float): Parameter for pencil sketch filter that controls the intensity of the shading.
+        Returns:
+            numpy.ndarray: The filtered frame.
+        """
         if filter_type == "cartoon":
             filtered_frame = self.apply_cartoon_filter(frame)
         elif filter_type == "cartoon_stylized":
@@ -569,4 +563,4 @@ if __name__ == '__main__':
     selected_filter = filters_list[4] 
     
     print(f"Applying {selected_filter} filter. Press 'q' to quit.")
-    insta.start_filters_onvideo(filter=selected_filter)
+    insta.start_filters(filter=selected_filter)
