@@ -254,33 +254,8 @@ class InstagramFilters():
                 
                 # Flip frame horizontally for a mirror effect (standard for webcam)
                 frame = cv2.flip(frame, 1) 
-                
-                if filter_type == "cartoon":
-                    filtered_frame = self.apply_cartoon_filter(frame)
-                    cv2.imshow('Cartoon Filter', filtered_frame)
-                elif filter_type == "cartoon_stylized":
-                    if sigma_s is not None and sigma_r is not None:
-                        filtered_frame = cv2.stylization(frame, sigma_s=sigma_s, sigma_r=sigma_r)
-                    else:
-                        filtered_frame = self.apply_cartoon_stylized_filter(frame)
-                    cv2.imshow('Cartoon Stylized Filter', filtered_frame)
-                elif filter_type == "pencil":
-                    if sigma_s is not None and sigma_r is not None:
-                        gray, color = cv2.pencilSketch(frame, sigma_s=sigma_s, sigma_r=sigma_r, shade_factor=shade_factor if shade_factor else 0.08)
-                        filtered_frame = gray
-                    else:
-                        filtered_frame = self.apply_pencil_sketch_filter(frame)
-                    cv2.imshow('Pencil Sketch Filter', filtered_frame)
-                elif filter_type == "skin":
-                    filtered_frame = self.apply_skin_smoothing_filter(frame)
-                    cv2.imshow('Skin Smoothing Filter', filtered_frame)
-                elif filter_type == "sunglasses":
-                    filtered_frame = self.apply_sunglasses_filter(frame)
-                    cv2.imshow('Sunglasses Filter', filtered_frame)
-                else:
-                    cv2.imshow('Original', frame)
-                    # print("No filter selected, showing original.")
-                    
+                filtered_frame = self.selected_filter_action(filter_type, frame, sigma_s, sigma_r, shade_factor)
+                cv2.imshow(f'{filter_type.capitalize() if filter_type else "Original"} Video', filtered_frame)    
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             self.cap.release()
@@ -302,36 +277,35 @@ class InstagramFilters():
         """
         if self.is_image:
             filter_type = filter.lower() if filter else None
-            if filter_type == "cartoon":
-                filtered_image = self.apply_cartoon_filter(self.image)
-                cv2.imshow('Cartoon Filter', filtered_image)
-            elif filter_type == "cartoon_stylized":
-                if sigma_s is not None and sigma_r is not None:
-                    filtered_image = cv2.stylization(self.image, sigma_s=sigma_s, sigma_r=sigma_r)
-                else:
-                    filtered_image = self.apply_cartoon_stylized_filter(self.image)
-                cv2.imshow('Cartoon Stylized Filter', filtered_image)
-            elif filter_type == "pencil":
-                if sigma_s is not None and sigma_r is not None:
-                    gray, color = cv2.pencilSketch(self.image, sigma_s=sigma_s, sigma_r=sigma_r, shade_factor=shade_factor if shade_factor else 0.08)
-                    filtered_image = gray
-                else:
-                    filtered_image = self.apply_pencil_sketch_filter(self.image)
-                cv2.imshow('Pencil Sketch Filter', filtered_image)
-            elif filter_type == "skin":
-                filtered_image = self.apply_skin_smoothing_filter(self.image)
-                cv2.imshow('Skin Smoothing Filter', filtered_image)
-            elif filter_type == "sunglasses":
-                filtered_image = self.apply_sunglasses_filter(self.image)
-                cv2.imshow('Sunglasses Filter', filtered_image)
-            else:
-                cv2.imshow('Original Image', self.image)
-                print("No filter selected, showing original image.")
-                
+            filtered_image = self.selected_filter_action(filter_type, self.image, sigma_s, sigma_r, shade_factor)
+            cv2.imshow(f'{filter_type.capitalize() if filter_type else "Original"} Image', filtered_image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         else:
             print("The provided source is not an image. Please use start_filters_onvideo for video sources.")
+
+    def selected_filter_action(self, filter_type, frame, sigma_s, sigma_r, shade_factor):
+        if filter_type == "cartoon":
+            filtered_frame = self.apply_cartoon_filter(frame)
+        elif filter_type == "cartoon_stylized":
+            if sigma_s is not None and sigma_r is not None:
+                filtered_frame = cv2.stylization(frame, sigma_s=sigma_s, sigma_r=sigma_r)
+            else:
+                filtered_frame = self.apply_cartoon_stylized_filter(frame)
+        elif filter_type == "pencil":
+            if sigma_s is not None and sigma_r is not None:
+                gray, color = cv2.pencilSketch(frame, sigma_s=sigma_s, sigma_r=sigma_r, shade_factor=shade_factor if shade_factor else 0.08)
+                filtered_frame = gray
+            else:
+                filtered_frame = self.apply_pencil_sketch_filter(frame)
+        elif filter_type == "skin":
+            filtered_frame = self.apply_skin_smoothing_filter(frame)
+        elif filter_type == "sunglasses":
+            filtered_frame = self.apply_sunglasses_filter(frame)
+        else:
+            filtered_frame = frame        
+        return filtered_frame
+
 
 # Blemish Removal 
 class Blemish():
