@@ -5,7 +5,7 @@ This repository contains Python projects and assignments for the Computer Vision
 ## Repository Structure
 
 - `submission.py` - A sunglasses filter demo that detects faces and overlays transparent sunglasses.
-- `final_projects.py` - Final project entry point for course deliverables.
+- `cv_helper_classes.py` - Final project entry point for course deliverables.
 - `requirements.txt` - Python dependencies for running the repository scripts.
 - `musk.jpg` - Example source image used by the sunglasses filter demo.
 - `sunglass.png` - Transparent sunglasses image with an alpha channel used for overlay.

@@ -29,7 +29,7 @@ def imread_custom(image_path, options=cv2.IMREAD_UNCHANGED):
     img = cv2.imdecode(img_array, options)
     return img
 
-class InstagramFilters():
+class Filters():
     """
     A class that applies various Instagram-like filters to images and videos using OpenCV.
     This class supports real-time video processing from a webcam or video file, as well as static image processing. It includes filters such as cartoon, cartoon stylization, pencil sketch, skin smoothing, and a fun sunglasses overlay. The class is designed to be flexible and efficient, with pre-loaded Haar Cascades for face and eye detection to optimize performance during video processing.
@@ -441,7 +441,7 @@ class DocumentScanner():
         return T
 
 
-class SoccerTracker:
+class BallTracker:
     def __init__(self, model_path='yolov8s.pt'):
         self.model = YOLO(model_path) 
         self.tracker = None
@@ -509,7 +509,7 @@ class SoccerTracker:
 
 if __name__ == '__main__':
     # cap = cv2.VideoCapture("soccer-ball.mp4")
-    # soccer_tracker = SoccerTracker()
+    # soccer_tracker = BallTracker()
 
     # while cap.isOpened():
     #     ret, frame = cap.read()
@@ -556,11 +556,11 @@ if __name__ == '__main__':
     video_source = 0  # Use 0 for webcam, or replace with video file path like 'video.mp4'
     glusses_path = None # "sunglass.png"
 
-    insta = InstagramFilters(glusses_path, video_source)
+    filter = Filters(glusses_path, video_source)
     
     # Change the string to test different features: 
     filters_list = ['cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses', None]
     selected_filter = filters_list[4] 
     
     print(f"Applying {selected_filter} filter. Press 'q' to quit.")
-    insta.start_filters(filter=selected_filter)
+    filter.start_filters(filter=selected_filter)
