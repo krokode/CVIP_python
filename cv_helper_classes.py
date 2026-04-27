@@ -46,11 +46,12 @@ class Filters():
         apply_cartoon_stylized_filter(frame): Applies a cartoon stylization filter to the input frame.
         apply_pencil_sketch_filter(frame): Applies a pencil sketch filter to the input frame.
         apply_skin_smoothing_filter(frame): Applies a skin smoothing filter to the input frame.
-        apply_sunglasses_filter(frame): Applies a sunglasses filter to the input frame.
-        start_filters_onvideo(filter, sigma_s, sigma_r, shade_factor): Starts the video stream and applies the selected filter in real-time.
-        start_filters_onimage(filter, sigma_s, sigma_r, shade_factor): Applies the selected filter to the image and displays the result.
+        _create_sunglasses_overlay(width, height): Creates a transparent sunglasses overlay programmatically if no sunglasses are provided.
+        apply_sunglasses_filter(frame, reflection=False, transparency=0.5): Applies a sunglasses filter to the input frame.
+        start_filters(filter, sigma_s, sigma_r, shade_factor, reflection=False, transparency=0.5): Starts the video stream or displays the image with the selected filter applied.
+        selected_filter_action(filter_type, frame, sigma_s, sigma_r, shade_factor, reflection=False, transparency=0.5): Helper method to apply the selected filter based on the filter type.
     """
-    def __init__(self, glasses_path, source, width=640, height=480):
+    def __init__(self, glasses_path, reflection_path, source, width=640, height=480):
         # Load Haar Cascades once during initialization to save performance during video loop
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
@@ -58,6 +59,11 @@ class Filters():
             self.glasses = imread_custom(glasses_path)
         else:
             self.glasses = None
+
+        if reflection_path:
+            self.reflection_img = imread_custom(reflection_path)
+        else:
+            self.reflection_img = None
 
         if isinstance(source, int) or source.split('.')[-1].lower() in ['mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv']:
             self.width = width
@@ -158,43 +164,8 @@ class Filters():
         cv2.line(overlay, (3*width//4 + width//5, height//2), (width, height//2), (0, 0, 0, 220), max(2, height//10))
         
         return overlay
-    
-    def _add_lens_reflection(self, sunglasses, intensity=0.25):
-        h, w = sunglasses.shape[:2]
-        num_channels = sunglasses.shape[2]
-
-        # Create the gradient reflection (always 3 channels)
-        y, x = np.ogrid[:h, :w]
-        gradient = ((x / w + y / h) / 2 * 255).astype(np.uint8)
-        reflection = np.stack([gradient] * 3, axis=2)
-        reflection = cv2.GaussianBlur(reflection, (31, 31), 0)
-
-        # Create the elliptical mask
-        mask = np.zeros((h, w), dtype=np.float32)
-        cv2.ellipse(
-            mask,
-            (w // 2, int(h * 0.3)),
-            (int(w * 0.45), int(h * 0.35)),
-            angle=-20,
-            startAngle=0,
-            endAngle=360,
-            color=1,
-            thickness=-1
-        )
-        mask = cv2.GaussianBlur(mask, (51, 51), 0)
         
-        # Expand mask to 3D for broadcasting: (h, w, 1)
-        mask_3d = mask[:, :, np.newaxis]
-        blend_factor = intensity * mask_3d
-
-        # Apply to RGB channels only
-        result = sunglasses.copy().astype(np.float32)
-        result[:, :, :3] = (result[:, :, :3] * (1 - blend_factor) + 
-                            reflection * blend_factor)
-
-        return result.astype(np.uint8)
-
-    def apply_sunglasses_filter(self, frame):
+    def apply_sunglasses_filter(self, frame, reflection=False, transparency=0.5):
         """
         Apply a sunglasses filter to the input frame.
         """
@@ -225,19 +196,32 @@ class Filters():
                 sunglasses = cv2.resize(self.glasses, (w_g, h_g))
             else:
                 sunglasses = self._create_sunglasses_overlay(w_g, h_g)
-            sunglasses = self._add_lens_reflection(sunglasses)
-            
+
             alpha = sunglasses[:, :, 3] / 255.0
-            alpha = alpha * 0.5
+            alpha = alpha * transparency
             
             for c in range(3):
                 result[start_y:end_y, start_x:end_x, c] = (
                     alpha * sunglasses[:, :, c] + (1.0 - alpha) * result[start_y:end_y, start_x:end_x, c]
                 ).astype(np.uint8)
-                    
+            
+            if reflection:
+                # Takes result, flips it horizontally, and blends it back onto the glasses area to simulate a reflection effect
+                if self.reflection_img is not None:
+                    resized_reflection = cv2.resize(self.reflection_img, (w_g, h_g))
+                else:
+                    flipped_result = cv2.flip(result, 1)
+                    resized_reflection = cv2.resize(flipped_result, (w_g, h_g))
+                apply_resized_reflection_on_glasses = (alpha[:, :, np.newaxis] * resized_reflection + (1 - alpha[:, :, np.newaxis]) * result[start_y:end_y, start_x:end_x]).astype(np.uint8) 
+                
+                for c in range(3):
+                    result[start_y:end_y, start_x:end_x, c] = (
+                        alpha * apply_resized_reflection_on_glasses[:, :, c] + (1.0 - alpha) * result[start_y:end_y, start_x:end_x, c]
+                    ).astype(np.uint8)
+
         return result    
 
-    def start_filters(self, filter=None, sigma_s=None, sigma_r=None, shade_factor=None):
+    def start_filters(self, filter=None, sigma_s=None, sigma_r=None, shade_factor=None, reflection=False, transparency=0.5):
         """
         Start the video stream or display the image with the selected filter applied.
         Args:
@@ -245,6 +229,8 @@ class Filters():
             sigma_s (float): Parameter for stylization and pencil sketch filters that controls the size of the neighborhood used for filtering. Higher values result in a more pronounced effect.
             sigma_r (float): Parameter for stylization and pencil sketch filters that controls the range of colors to be smoothed together. Higher values result in more smoothing across different colors.
             shade_factor (float): Parameter for pencil sketch filter that controls the intensity of the shading. Higher values result in darker shading. Default is 0.08.
+            reflection (bool): Whether to add a reflection effect to the sunglasses filter. Default is False.
+            transparency (float): The transparency level for the sunglasses filter, between 0 (fully transparent) and 1 (fully opaque). Default is 0.5.
         """
         if not self.is_image:
             filter_type = filter.lower() if filter else None
@@ -254,20 +240,20 @@ class Filters():
                     break
                 # Flip frame horizontally for a mirror effect (standard for webcam)
                 frame = cv2.flip(frame, 1) 
-                filtered_frame = self.selected_filter_action(filter_type, frame, sigma_s, sigma_r, shade_factor)
+                filtered_frame = self.selected_filter_action(filter_type, frame, sigma_s, sigma_r, shade_factor, reflection=reflection, transparency=transparency)
                 cv2.imshow(f'{filter_type.capitalize() if filter_type else "Original"} Video', filtered_frame)    
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             self.cap.release()
         else:
             filter_type = filter.lower() if filter else None
-            filtered_image = self.selected_filter_action(filter_type, self.image, sigma_s, sigma_r, shade_factor)
+            filtered_image = self.selected_filter_action(filter_type, self.image, sigma_s, sigma_r, shade_factor, reflection=reflection, transparency=transparency)
             cv2.imshow(f'{filter_type.capitalize() if filter_type else "Original"} Image', filtered_image)
             cv2.waitKey(0)
             
         cv2.destroyAllWindows()
 
-    def selected_filter_action(self, filter_type, frame, sigma_s, sigma_r, shade_factor):
+    def selected_filter_action(self, filter_type, frame, sigma_s, sigma_r, shade_factor, reflection=False, transparency=0.5):
         """
         Apply the selected filter to the given frame.
         Args:
@@ -276,6 +262,8 @@ class Filters():
             sigma_s (float): Parameter for stylization and pencil sketch filters that controls the size of the neighborhood used for filtering.
             sigma_r (float): Parameter for stylization and pencil sketch filters that controls the range of colors to be smoothed together.
             shade_factor (float): Parameter for pencil sketch filter that controls the intensity of the shading.
+            reflection (bool): Whether to add a reflection effect to the sunglasses filter.
+            transparency (float): The transparency level for the sunglasses filter.
         Returns:
             numpy.ndarray: The filtered frame.
         """
@@ -295,7 +283,7 @@ class Filters():
         elif filter_type == "skin":
             filtered_frame = self.apply_skin_smoothing_filter(frame)
         elif filter_type == "sunglasses":
-            filtered_frame = self.apply_sunglasses_filter(frame)
+            filtered_frame = self.apply_sunglasses_filter(frame, reflection=reflection, transparency=transparency)
         else:
             filtered_frame = frame        
         return filtered_frame
@@ -554,13 +542,14 @@ if __name__ == '__main__':
 
 
     video_source = 0  # Use 0 for webcam, or replace with video file path like 'video.mp4'
-    glusses_path = None # "sunglass.png"
+    glusses_path = "sunglass.png" # None to use programmatically generated sunglasses
+    reflect_img = "reflection_1.jpg" # None to use flipped frame as reflection, or provide your own reflection image path
 
-    filter = Filters(glusses_path, video_source)
+    filter = Filters(glusses_path, reflect_img, video_source)
     
     # Change the string to test different features: 
     filters_list = ['cartoon', 'cartoon_stylized', 'pencil', 'skin', 'sunglasses', None]
     selected_filter = filters_list[4] 
     
     print(f"Applying {selected_filter} filter. Press 'q' to quit.")
-    filter.start_filters(filter=selected_filter)
+    filter.start_filters(filter=selected_filter, reflection=True, transparency=0.8)
